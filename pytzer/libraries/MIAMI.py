@@ -268,4 +268,9 @@ lnk = {
     'HSO4': dissociation.HSO4_CRP94,
     'H2CO3': dissociation.H2CO3_MP98,
     'HCO3': dissociation.HCO3_MP98,
+    'MgCO3': dissociation.MgCO3_MP98,
+    'CaCO3': dissociation.CaCO3_MP98,
+    'SrCO3': dissociation.SrCO3_MP98,
+    'MgF': dissociation.MgF_MP98,
+    'CaF': dissociation.CaF_MP98,
 } # end of lnks dict

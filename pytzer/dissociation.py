@@ -64,16 +64,40 @@ def MgOH_CW91_ln(tempK, pres):
 def MgOH_CW91(tempK, pres):
     """MgOH+ formation following CW91 in log10 and then converted."""
     # Matches Clegg's model [2019-07-02]
-    log10kMg = 3.87 - 501.5/tempK
-    lnkMg = log10kMg*log(10)
-    return lnkMg
+    log10kMgOH = 3.87 - 501.5/tempK
+    lnkMgOH = log10kMgOH*log(10)
+    return lnkMgOH
 
 def MgOH_MP98(tempK, pres):
     """MgOH+ formation following MP98."""
-    log10kMg = 3.87 - 501.6/tempK
-    lnkMg = log10kMg*log(10)
-    return lnkMg
+    log10kMgOH = 3.87 - 501.6/tempK
+    lnkMgOH = log10kMgOH*log(10)
+    return lnkMgOH
 
+def MP98_eq24(tempK, A, B, C):
+    pK = A + B/tempK + C*tempK
+    return -pK*log(10)
+
+def MgCO3_MP98(tempK, pres):
+    """MgCO3 formation [MP98]."""
+    return MP98_eq24(tempK, 1.028, 0, 0.0066154)
+
+def CaCO3_MP98(tempK, pres):
+    """CaCO3 formation [MP98]."""
+    return MP98_eq24(tempK, 1.178, 0, 0.0066154)
+
+def SrCO3_MP98(tempK, pres):
+    """SrCO3 formation [MP98]."""
+    return MP98_eq24(tempK, 1.028, 0, 0.0066154)
+
+def MgF_MP98(tempK, pres):
+    """MgF+ formation [MP98]."""
+    return MP98_eq24(tempK, 3.504, -501.6, 0)
+
+def CaF_MP98(tempK, pres):
+    """CaF+ formation [MP98]."""
+    return MP98_eq24(tempK, 3.014, -501.6, 0)
+    
 def MP98_eq23(tempK, A, B, C, D):
     return A + B/tempK + C*log(tempK) + D*tempK
 

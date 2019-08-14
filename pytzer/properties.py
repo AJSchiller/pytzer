@@ -8,19 +8,23 @@ from autograd.numpy import concatenate, float_, unique, vstack
 _ion2charge = {
     # Neutrals
     'BOH3': 0,
+    'CaCO3': 0,
     'CO2': 0,
     'H2S': 0,
     'H3PO4': 0,
     'HF': 0,
     'glycerol': 0,
+    'MgCO3': 0,
     'NH3': 0,
     'SO2': 0,
+    'SrCO3': 0,
     'sucrose': 0,
     'tris': 0,
     'urea': 0,
     # Cations
     'Ba': +2,
     'Ca': +2,
+    'CaF': +1,
     'Cdjj': +2,
     'Cojj': +2,
     'Cs': +1,
@@ -32,6 +36,7 @@ _ion2charge = {
     'La': +3,
     'Li': +1,
     'Mg': +2,
+    'MgF': +1,
     'MgOH': +1,
     'Na': +1,
     'NH4': +1,
@@ -227,9 +232,12 @@ _ele2ions = {
 _eq2ions = {
     't_H2CO3': ('CO2', 'HCO3', 'CO3'),
     't_HSO4': ('HSO4', 'SO4'),
-    't_Mg': ('Mg', 'MgOH'),
+    't_Mg': ('Mg', 'MgOH', 'MgCO3', 'MgF'),
+    't_Ca': ('Ca', 'CaCO3', 'CaF'),
+    't_Sr': ('Sr', 'SrCO3'),
     't_trisH': ('trisH', 'tris'),
     't_BOH3': ('BOH3', 'BOH4'),
+    't_F': ('F', 'HF'),
 }
 
 def charges(ions):
