@@ -112,3 +112,8 @@ def HCO3_MP98(tempK, pres):
 def BOH3_M79(tempK, pres):
     """Boric acid dissociation [MP98 following M79]."""
     return MP98_eq23(tempK, 148.0248, -8966.901, -24.4344, 0)
+
+def NH4_MP98(tempK, pres):
+    """NH4+ dissociation [MP98]."""
+    # This is from MP98 - should go check their cited ref. BP49 directly
+    return MP98_eq23(tempK, -0.25444, -6285.33, 0, 0.0001635)
