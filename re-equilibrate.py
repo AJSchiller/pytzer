@@ -2,7 +2,7 @@ from copy import deepcopy
 import pytzer as pz
 from pytzer.equilibrate import _sig01
 from pytzer import equilibrate as pq
-from autograd.numpy import append, array, concatenate, exp, sqrt
+from autograd.numpy import append, array, concatenate, exp, sqrt, zeros_like
 from autograd.numpy import sum as np_sum
 from autograd import elementwise_grad as egrad
 
@@ -459,11 +459,11 @@ def _eqtotcheck(equilibrium, equilibria, ele, eles, tots1, eqindex, lnks,
     if equilibrium in equilibria:
         if equilibrium == 'H2O':
             q = eqindex(equilibrium)
-            gEq = Gfunc(*Gargs, lnks[q])
+            gEq = Gfunc(*Gargs, lnks[q])[0]
         else:
             if tots1[eles == ele] > 0:
                 q = eqindex(equilibrium)
-                gEq = Gfunc(*Gargs, lnks[q])
+                gEq = Gfunc(*Gargs, lnks[q])[0]
             else:
                 gEq = 0.0
     else:
@@ -471,47 +471,44 @@ def _eqtotcheck(equilibrium, equilibria, ele, eles, tots1, eqindex, lnks,
     return gEq
 
 def newGibbs(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots,
-        zbfixed, eqions, fixmols, fixions, allmxs, lnks, tots1, ideal=False):
+        zbfixed, eqions, fixmols, fixions, allmxs, lnks, ideal=False):
     allmols, allions = getallmols(eqstate, tots, eles, eqindex, equilibria,
         eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions)
     allmols = array([allmols])
-    # Get activities:
+    # Get activities and molalities:
     if ideal:
         lnaw = 0.0
-        lnacfH = 0.0
-        lnacfOH = 0.0
-        lnacfHSO4 = 0.0
-        lnacfSO4 = 0.0
-        lnacfMg = 0.0
-        lnacfMgOH = 0.0
-        lnacfTris = 0.0
-        lnacfTrisH = 0.0
-        lnacfCO2 = 0.0
-        lnacfHCO3 = 0.0
-        lnacfCO3 = 0.0
-        lnacfBOH3 = 0.0
-        lnacfBOH4 = 0.0
+        lnacfs = zeros_like(allmols[0])
     else:
         lnaw = pz.matrix.lnaw(allmols, allmxs)
         lnacfs = pz.matrix.ln_acfs(allmols, allmxs)
-        lnacfH = lnacfs[allions == 'H']
-        lnacfOH = lnacfs[allions == 'OH']
-        lnacfHSO4 = lnacfs[allions == 'HSO4']
-        lnacfSO4 = lnacfs[allions == 'SO4']
-        lnacfMg = lnacfs[allions == 'Mg']
-        lnacfMgOH = lnacfs[allions == 'MgOH']
-        lnacfTris = lnacfs[allions == 'tris']
-        lnacfTrisH = lnacfs[allions == 'trisH']
-        lnacfCO2 = lnacfs[allions == 'CO2']
-        lnacfHCO3 = lnacfs[allions == 'HCO3']
-        lnacfCO3 = lnacfs[allions == 'CO3']
-        lnacfBOH3 = lnacfs[allions == 'BOH3']
-        lnacfBOH4 = lnacfs[allions == 'BOH4']
+    def get_m_lnacf(ion):
+        ix = allions == ion
+        return allmols[0][ix], lnacfs[ix]
+    mH, lnacfH = get_m_lnacf('H')
+    mOH, lnacfOH = get_m_lnacf('OH')
+    mHSO4, lnacfHSO4 = get_m_lnacf('HSO4')
+    mSO4, lnacfSO4 = get_m_lnacf('SO4')
+    mMg, lnacfMg = get_m_lnacf('Mg')
+    mMgCO3, lnacfMgCO3 = get_m_lnacf('MgCO3')
+    mMgOH, lnacfMgOH = get_m_lnacf('MgOH')
+    mTris, lnacfTris = get_m_lnacf('tris')
+    mTrisH, lnacfTrisH = get_m_lnacf('trisH')
+    mCO2, lnacfCO2 = get_m_lnacf('CO2')
+    mHCO3, lnacfHCO3 = get_m_lnacf('HCO3')
+    mCO3, lnacfCO3 = get_m_lnacf('CO3')
+    mBOH3, lnacfBOH3 = get_m_lnacf('BOH3')
+    mBOH4, lnacfBOH4 = get_m_lnacf('BOH4')
+    mCa, lnacfCa = get_m_lnacf('Ca')
+    mCaCO3, lnacfCaCO3 = get_m_lnacf('CaCO3')
+    mSr, lnacfSr = get_m_lnacf('Sr')
+    mSrCO3, lnacfSrCO3 = get_m_lnacf('SrCO3')
     # Evaluate equilibrium states:
     eq2eleArgs = {
         'BOH3': ('t_BOH3', pq._GibbsBOH3, (lnaw, lnacfBOH4, mBOH4, lnacfBOH3,
             mBOH3, lnacfH, mH)),
-#        'CaCO3': ('t_Ca', pq._GibbsCaCO3, ()),
+        'CaCO3': ('t_Ca', pq._GibbsCaCO3, (mCa, lnacfCa, mCaCO3, lnacfCaCO3,
+            mCO3, lnacfCO3)),
 #        'CaF': ('t_F', pq._GibbsCaF, ()),
         'CO2': ('t_H2CO3', pq._GibbsH2CO3, (lnaw, mH, lnacfH, mHCO3, lnacfHCO3,
             mCO2, lnacfCO2)),
@@ -521,18 +518,20 @@ def newGibbs(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots,
 #        'HF': ('t_F', pq._GibbsHF, ()),
         'HSO4': ('t_HSO4', pq._GibbsHSO4, (mH, lnacfH, mSO4, lnacfSO4, mHSO4,
             lnacfHSO4)),
-#        'MgCO3': ('t_Mg', pq._GibbsMgCO3, ()),
+        'MgCO3': ('t_Mg', pq._GibbsMgCO3, (mMg, lnacfMg, mMgCO3, lnacfMgCO3,
+            mCO3, lnacfCO3)),
 #        'MgF': ('t_F', pq._GibbsMgF, ()),
         'MgOH': ('t_Mg', pq._GibbsMgOH, (mMg, lnacfMg, mMgOH, lnacfMgOH, mOH,
             lnacfOH)),
-#        'SrCO3': ('t_Sr', pq._GibbsSrCO3, ()),
+        'SrCO3': ('t_Sr', pq._GibbsSrCO3, (mSr, lnacfSr, mSrCO3, lnacfSrCO3,
+            mCO3, lnacfCO3)),
         'trisH': ('t_trisH', pq._GibbstrisH, (mH, lnacfH, mTris, lnacfTris,
             mTrisH, lnacfTrisH)),
     }
-    GComponents = [_eqtotcheck(eq, equilibria, eq2eleArgs[eq][0], eles, tots1,
+    GComponents = [_eqtotcheck(eq, equilibria, eq2eleArgs[eq][0], eles, tots,
         eqindex, lnks, eq2eleArgs[eq][1], eq2eleArgs[eq][2])
-        for eq in equilibria if eq in eq2eleArgs]
-
+        if eq in eq2eleArgs else 0.0 for eq in equilibria]
+#    GComponents = eqstate
 #    if tots1[eles == 't_H2CO3'] > 0:
 #        gH2CO3 = _GibbsH2CO3(lnaw, mH, lnacfH, mHCO3, lnacfHCO3, mCO2,
 #            lnacfCO2, lnkH2CO3)
@@ -546,7 +545,7 @@ def newGibbs(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots,
 #            lnacfH, mH, lnkBOH3)
 #    else:
 #        gBOH3 = 0.0
-    return lnacfs, lnaw, GComponents
+    return GComponents
 
 allmxs = pz.matrix.assemble(allions, tempK, pres, prmlib=prmlib)
 lnks = [lnkfunc(tempK, pres) for lnkfunc in lnkfuncs]
@@ -554,7 +553,34 @@ lnks = [lnkfunc(tempK, pres) for lnkfunc in lnkfuncs]
 allmols, allions = getallmols(eqstate, tots, eles, eqindex, equilibria,
     eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions)
 
-lnacfs, lnaw, GComponents = newGibbs(eqstate, tots, eles, eqindex, equilibria,
+GComponents = newGibbs(eqstate, tots, eles, eqindex, equilibria,
     eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions, allmxs, lnks,
-    tots, ideal=False)
+    ideal=False)
+def getGTotal(eqstate, tots, eles, eqindex, equilibria,
+        eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions, allmxs, lnks,
+        ideal=False):
+    GComponents = newGibbs(eqstate, tots, eles, eqindex, equilibria,
+        eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions, allmxs, lnks,
+        ideal)
+    GTotal = np_sum(array(GComponents)**2)
+    return GTotal
 
+GArgs = (tots, eles, eqindex, equilibria,
+    eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions, allmxs, lnks,
+    False)
+
+GTotal = getGTotal(eqstate, *GArgs)
+from autograd import grad
+GGrad = grad(getGTotal)
+GTGrad = GGrad(eqstate, *GArgs)
+
+from scipy.optimize import minimize
+
+eqstate_solved = minimize(
+    lambda eqstate: getGTotal(eqstate, *GArgs),
+    eqstate,
+    method='BFGS',
+    jac=lambda eqstate: GGrad(eqstate, *GArgs),
+)
+GTotal_solved = getGTotal(eqstate_solved['x'], *GArgs)
+GComponents_solved = newGibbs(eqstate_solved['x'], *GArgs)

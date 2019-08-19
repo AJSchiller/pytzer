@@ -124,6 +124,11 @@ def _varmols(eqstate, tots1, fixmols1, eles, fixions, fixcharges):
     return (mH, mOH, mHSO4, mSO4, mMg, mMgOH, mtris, mtrisH, mCO2, mHCO3, mCO3,
         mBOH3, mBOH4)
 
+def _GibbsBOH3(lnaw, lnacfBOH4, mBOH4, lnacfBOH3, mBOH3, lnacfH, mH, lnkBOH3):
+    """Evaluate the Gibbs energy for the boric acid equilibrium."""
+    return (lnacfBOH4 + log(mBOH4) + lnacfH + log(mH) - lnacfBOH3 -
+        log(mBOH3) - lnaw - lnkBOH3)
+
 def _GibbsH2O(lnaw, mH, lnacfH, mOH, lnacfOH, lnkH2O):
     """Evaluate the Gibbs energy for water dissocation."""
     return lnacfH + log(mH) + lnacfOH + log(mOH) - lnaw - lnkH2O
@@ -132,6 +137,21 @@ def _GibbsHSO4(mH, lnacfH, mSO4, lnacfSO4, mHSO4, lnacfHSO4, lnkHSO4):
     """Evaluate the Gibbs energy for the bisulfate-sulfate equilibrium."""
     return (lnacfH + log(mH) + lnacfSO4 + log(mSO4) - lnacfHSO4 - log(mHSO4)
         - lnkHSO4)
+
+def _GibbsCaCO3(mCa, lnacfCa, mCaCO3, lnacfCaCO3, mCO3, lnacfCO3, lnkCaCO3):
+    """Evaluate the Gibbs energy for CaCO3(aq) formation."""
+    return (lnacfCa + log(mCa) + lnacfCO3 + log(mCO3) - lnacfCaCO3 -
+        log(mCaCO3) + lnkCaCO3)
+
+def _GibbsMgCO3(mMg, lnacfMg, mMgCO3, lnacfMgCO3, mCO3, lnacfCO3, lnkMgCO3):
+    """Evaluate the Gibbs energy for MgCO3(aq) formation."""
+    return (lnacfMg + log(mMg) + lnacfCO3 + log(mCO3) - lnacfMgCO3 -
+        log(mMgCO3) + lnkMgCO3)
+    
+def _GibbsSrCO3(mSr, lnacfSr, mSrCO3, lnacfSrCO3, mCO3, lnacfCO3, lnkSrCO3):
+    """Evaluate the Gibbs energy for SrCO3(aq) formation."""
+    return (lnacfSr + log(mSr) + lnacfCO3 + log(mCO3) - lnacfSrCO3 -
+        log(mSrCO3) + lnkSrCO3)
 
 def _GibbsMgOH(mMg, lnacfMg, mMgOH, lnacfMgOH, mOH, lnacfOH, lnkMgOH):
     """Evaluate the Gibbs energy for the magnesium-MgOH+ equilibrium."""
@@ -152,11 +172,6 @@ def _GibbsHCO3(mH, lnacfH, mHCO3, lnacfHCO3, mCO3, lnacfCO3, lnkHCO3):
     """Evaluate the Gibbs energy for the bicarbonate-carbonate equilibrium."""
     return (lnacfH + log(mH) + lnacfCO3 + log(mCO3) - lnacfHCO3 - log(mHCO3)
         - lnkHCO3)
-
-def _GibbsBOH3(lnaw, lnacfBOH4, mBOH4, lnacfBOH3, mBOH3, lnacfH, mH, lnkBOH3):
-    """Evaluate the Gibbs energy for the boric acid equilibrium."""
-    return (lnacfBOH4 + log(mBOH4) + lnacfH + log(mH) - lnacfBOH3 -
-        log(mBOH3) - lnaw - lnkBOH3)
 
 def _GibbsComponents(eqstate, tots1, fixmols1, eles, allions, fixions,
         fixcharges, allmxs, lnks, ideal=False):
