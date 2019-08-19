@@ -33,6 +33,7 @@ def _get_m_lnacf(ion, allindex, allmolsT, lnacfs):
 allions = [ion for ion in fixions]
 varions = ('H', 'OH', 'HSO4', 'SO4')
 allions.extend(varions)
+prmlib.add_zeros(allions)
 allindex = allions.index
 allmxs = pz.matrix.assemble(allions, tempK, pres, prmlib=prmlib)
 
