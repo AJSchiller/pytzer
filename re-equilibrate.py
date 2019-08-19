@@ -1,7 +1,8 @@
 from copy import deepcopy
 import pytzer as pz
 from pytzer.equilibrate import _sig01
-from autograd.numpy import array, concatenate, exp, sqrt
+from pytzer import equilibrate as pq
+from autograd.numpy import append, array, concatenate, exp, sqrt
 from autograd.numpy import sum as np_sum
 from autograd import elementwise_grad as egrad
 
@@ -15,9 +16,9 @@ if len(fixcharges) == 0:
     zbfixed = 0.0
 else:
     zbfixed = np_sum(fixmols1*fixcharges)
-allions = pz.properties.getallions(eles, fixions)
+allionsOLD = pz.properties.getallions(eles, fixions)
 prmlib = deepcopy(pz.libraries.MIAMI)
-prmlib.add_zeros(allions) # just in case
+prmlib.add_zeros(allionsOLD) # just in case
 
 # Auto-prepare eqstate and equilibria lists
 _serieses = {
@@ -43,33 +44,45 @@ _parasites = {
     },
 }
 def _eqprep(eles, prmlib):
+    """Generate default eqstate vector, lists of equilibria names and types,
+    and ions/solutes involved in the equilibria.
+    """
     eqions = ['H', 'OH']
     equilibria = []
     eqtype = []
     eqtots = []
+    lnkfuncs = []
     for ele in eles:
         if ele in _serieses:
             eqions.extend(_serieses[ele])
             equilibria.extend(_serieses[ele][:-1])
             eqtype.extend(_serieses[ele][:-1])
-            eqtots.extend([ele for _ in _serieses[ele][:-1]])
+            eqtots.extend([str(ele) for _ in _serieses[ele][:-1]])
+            lnkfuncs.extend([prmlib.lnk[ele] if ele in prmlib.lnk else
+                lambda tempK, pres: 0.0 for ele in _serieses[ele][:-1]])
         elif ele in _parasites:
             for parasite in _parasites[ele]:
                 if parasite in prmlib.lnk:
                     eqions.extend(_parasites[ele][parasite][0])
                     equilibria.append(parasite)
                     eqtype.append(_parasites[ele][parasite][1])
-                    eqtots.append(ele)
+                    eqtots.append(str(ele))
+                    lnkfuncs.append(prmlib.lnk[parasite])
+            eqions.append(ele.split('t_')[1])
     eqstate = [0.0 for _ in equilibria]
     if 'H2O' in prmlib.lnk:
-        eqstate.append(30.0)
         equilibria.append('H2O')
         eqtype.append('H2O')
         eqtots.append('H2O')
+        eqstate.append(30.0)
+        lnkfuncs.append(prmlib.lnk['H2O'])
     eqXCO3 = [equilibria[q] for q, eqt in enumerate(eqtype) if eqt == 'XCO3']
     eqXF = [equilibria[q] for q, eqt in enumerate(eqtype) if eqt == 'XF']
     eqindex = equilibria.index
-    return eqstate, equilibria, eqindex, eqtots, eqXCO3, eqXF, eqions
+    return eqstate, equilibria, eqindex, eqtots, eqXCO3, eqXF, eqions, lnkfuncs
+
+#eqstate, equilibria, eqindex, eqtots, eqXCO3, eqXF, eqions, lnkfuncs = \
+#    _eqprep(eles, prmlib)
 
 def _getfractions(eqstate, eqixs):
     if len(eqixs) == 3:
@@ -399,7 +412,7 @@ def _moldict2eqmols(moldict, eqions):
     return concatenate([moldict[ion] for ion in eqions])
 
 # Can we grad it? Yes, we can!
-eqstate, equilibria, eqindex, eqtots, eqXCO3, eqXF, eqions = \
+eqstate, equilibria, eqindex, eqtots, eqXCO3, eqXF, eqions, lnkfuncs = \
     _eqprep(eles, prmlib)
 xyargs = (tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots, zbfixed)
 (mMgCO3, mCaCO3, mSrCO3, mMgF, mCaF, mMgOH, mMg, mCa, mSr, mHF, mF,
@@ -408,25 +421,140 @@ xyargs = (tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots, zbfixed)
     getallXY(eqstate, *xyargs)
 getgrad = egrad(lambda eqstate, xyargs, i: getallXY(eqstate, *xyargs)[i])
 grad_test = getgrad(eqstate, xyargs, 0)
-
 moldict = getallXYdict(eqstate, *xyargs)
 dictgrad = egrad(lambda eqstate, xyargs, i: getallXYdict(eqstate, *xyargs)[i])
 grad_dict_test = dictgrad(eqstate, xyargs, 'MgCO3')
-
 eqmols = _moldict2eqmols(moldict, eqions)
 
-## Given that, what's going on with XF?
-#fMgF = pz.equilibrate._sig01(sigXCO3[3])
-#fCaF = 1.0 - fMgF
-#max_MgF_mult = (tMg - mMgCO3)/(fMgF*tF)
-#max_CaF_mult = (tCa - mCaCO3)/(fCaF*tF)
-#max_XF_mult = min((1.0, max_MgF_mult, max_CaF_mult))
-#max_XF = tF*max_XF_mult
-#tXF = pz.equilibrate._sig01(sigXCO3[4])*max_XF
-#mMgF = tXF*fMgF
-#mCaF = tXF*fCaF
-#
-## Get final metal totals
-#mMg = tMg - (mMgCO3 + mMgF)
-#mCa = tCa - (mCaCO3 + mCaF)
-#mSr = tSr - mSrCO3
+def geteqmols(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots,
+        zbfixed, eqions):
+    moldict = getallXYdict(eqstate, tots, eles, eqindex, equilibria, eqXCO3,
+        eqXF, eqtots, zbfixed)
+    eqmols = _moldict2eqmols(moldict, eqions)
+    return eqmols
+
+eqmols2 = geteqmols(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF,
+    eqtots, zbfixed, eqions)
+deqmols2 = egrad(lambda eqstate, eqargs: geteqmols(eqstate, *eqargs)[1])
+dtest = deqmols2(eqstate, (tots, eles, eqindex, equilibria, eqXCO3, eqXF,
+     eqtots, zbfixed, eqions))
+
+def getallmols(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots,
+        zbfixed, eqions, fixmols, fixions):
+    eqmols = geteqmols(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF,
+        eqtots, zbfixed, eqions)
+    allmols = append(fixmols.ravel(), eqmols)
+    allions = append(fixions, eqions)
+    return allmols, allions
+
+allmols, allions = getallmols(eqstate, tots, eles, eqindex, equilibria, eqXCO3,
+    eqXF, eqtots, zbfixed, eqions, fixmols, fixions)
+
+dallmols = egrad(lambda eqstate, eqargs: getallmols(eqstate, *eqargs)[0][5])
+dalltest = dallmols(eqstate, (tots, eles, eqindex, equilibria, eqXCO3, eqXF,
+    eqtots, zbfixed, eqions, fixmols, fixions))
+
+def _eqtotcheck(equilibrium, equilibria, ele, eles, tots1, eqindex, lnks,
+        Gfunc, Gargs):
+    if equilibrium in equilibria:
+        if equilibrium == 'H2O':
+            q = eqindex(equilibrium)
+            gEq = Gfunc(*Gargs, lnks[q])
+        else:
+            if tots1[eles == ele] > 0:
+                q = eqindex(equilibrium)
+                gEq = Gfunc(*Gargs, lnks[q])
+            else:
+                gEq = 0.0
+    else:
+        gEq = 0.0
+    return gEq
+
+def newGibbs(eqstate, tots, eles, eqindex, equilibria, eqXCO3, eqXF, eqtots,
+        zbfixed, eqions, fixmols, fixions, allmxs, lnks, tots1, ideal=False):
+    allmols, allions = getallmols(eqstate, tots, eles, eqindex, equilibria,
+        eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions)
+    allmols = array([allmols])
+    # Get activities:
+    if ideal:
+        lnaw = 0.0
+        lnacfH = 0.0
+        lnacfOH = 0.0
+        lnacfHSO4 = 0.0
+        lnacfSO4 = 0.0
+        lnacfMg = 0.0
+        lnacfMgOH = 0.0
+        lnacfTris = 0.0
+        lnacfTrisH = 0.0
+        lnacfCO2 = 0.0
+        lnacfHCO3 = 0.0
+        lnacfCO3 = 0.0
+        lnacfBOH3 = 0.0
+        lnacfBOH4 = 0.0
+    else:
+        lnaw = pz.matrix.lnaw(allmols, allmxs)
+        lnacfs = pz.matrix.ln_acfs(allmols, allmxs)
+        lnacfH = lnacfs[allions == 'H']
+        lnacfOH = lnacfs[allions == 'OH']
+        lnacfHSO4 = lnacfs[allions == 'HSO4']
+        lnacfSO4 = lnacfs[allions == 'SO4']
+        lnacfMg = lnacfs[allions == 'Mg']
+        lnacfMgOH = lnacfs[allions == 'MgOH']
+        lnacfTris = lnacfs[allions == 'tris']
+        lnacfTrisH = lnacfs[allions == 'trisH']
+        lnacfCO2 = lnacfs[allions == 'CO2']
+        lnacfHCO3 = lnacfs[allions == 'HCO3']
+        lnacfCO3 = lnacfs[allions == 'CO3']
+        lnacfBOH3 = lnacfs[allions == 'BOH3']
+        lnacfBOH4 = lnacfs[allions == 'BOH4']
+    # Evaluate equilibrium states:
+    eq2eleArgs = {
+        'BOH3': ('t_BOH3', pq._GibbsBOH3, (lnaw, lnacfBOH4, mBOH4, lnacfBOH3,
+            mBOH3, lnacfH, mH)),
+#        'CaCO3': ('t_Ca', pq._GibbsCaCO3, ()),
+#        'CaF': ('t_F', pq._GibbsCaF, ()),
+        'CO2': ('t_H2CO3', pq._GibbsH2CO3, (lnaw, mH, lnacfH, mHCO3, lnacfHCO3,
+            mCO2, lnacfCO2)),
+        'H2O': ('', pq._GibbsH2O, (lnaw, mH, lnacfH, mOH, lnacfOH)),
+        'HCO3': ('t_H2CO3', pq._GibbsHCO3, (mH, lnacfH, mHCO3, lnacfHCO3, mCO3,
+            lnacfCO3)),
+#        'HF': ('t_F', pq._GibbsHF, ()),
+        'HSO4': ('t_HSO4', pq._GibbsHSO4, (mH, lnacfH, mSO4, lnacfSO4, mHSO4,
+            lnacfHSO4)),
+#        'MgCO3': ('t_Mg', pq._GibbsMgCO3, ()),
+#        'MgF': ('t_F', pq._GibbsMgF, ()),
+        'MgOH': ('t_Mg', pq._GibbsMgOH, (mMg, lnacfMg, mMgOH, lnacfMgOH, mOH,
+            lnacfOH)),
+#        'SrCO3': ('t_Sr', pq._GibbsSrCO3, ()),
+        'trisH': ('t_trisH', pq._GibbstrisH, (mH, lnacfH, mTris, lnacfTris,
+            mTrisH, lnacfTrisH)),
+    }
+    GComponents = [_eqtotcheck(eq, equilibria, eq2eleArgs[eq][0], eles, tots1,
+        eqindex, lnks, eq2eleArgs[eq][1], eq2eleArgs[eq][2])
+        for eq in equilibria if eq in eq2eleArgs]
+
+#    if tots1[eles == 't_H2CO3'] > 0:
+#        gH2CO3 = _GibbsH2CO3(lnaw, mH, lnacfH, mHCO3, lnacfHCO3, mCO2,
+#            lnacfCO2, lnkH2CO3)
+#        gHCO3 = _GibbsHCO3(mH, lnacfH, mHCO3, lnacfHCO3, mCO3, lnacfCO3,
+#            lnkHCO3)
+#    else:
+#        gH2CO3 = 0.0
+#        gHCO3 = 0.0
+#    if tots1[eles == 't_BOH3'] > 0:
+#        gBOH3 = _GibbsBOH3(lnaw, lnacfBOH4, mBOH4, lnacfBOH3, mBOH3,
+#            lnacfH, mH, lnkBOH3)
+#    else:
+#        gBOH3 = 0.0
+    return lnacfs, lnaw, GComponents
+
+allmxs = pz.matrix.assemble(allions, tempK, pres, prmlib=prmlib)
+lnks = [lnkfunc(tempK, pres) for lnkfunc in lnkfuncs]
+
+allmols, allions = getallmols(eqstate, tots, eles, eqindex, equilibria,
+    eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions)
+
+lnacfs, lnaw, GComponents = newGibbs(eqstate, tots, eles, eqindex, equilibria,
+    eqXCO3, eqXF, eqtots, zbfixed, eqions, fixmols, fixions, allmxs, lnks,
+    tots, ideal=False)
+

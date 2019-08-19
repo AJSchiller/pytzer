@@ -133,10 +133,10 @@ def _GibbsHSO4(mH, lnacfH, mSO4, lnacfSO4, mHSO4, lnacfHSO4, lnkHSO4):
     return (lnacfH + log(mH) + lnacfSO4 + log(mSO4) - lnacfHSO4 - log(mHSO4)
         - lnkHSO4)
 
-def _GibbsMg(mMg, lnacfMg, mMgOH, lnacfMgOH, mOH, lnacfOH, lnkMg):
+def _GibbsMgOH(mMg, lnacfMg, mMgOH, lnacfMgOH, mOH, lnacfOH, lnkMgOH):
     """Evaluate the Gibbs energy for the magnesium-MgOH+ equilibrium."""
     return (lnacfMg + log(mMg) + lnacfOH + log(mOH) - lnacfMgOH - log(mMgOH)
-        + lnkMg)
+        + lnkMgOH)
 
 def _GibbstrisH(mH, lnacfH, mtris, lnacftris, mtrisH, lnacftrisH, lnktrisH):
     """Evaluate the Gibbs energy for the tris-trisH+ equilibrium."""
@@ -177,7 +177,7 @@ def _GibbsComponents(eqstate, tots1, fixmols1, eles, allions, fixions,
             q += 1
         elif ele == 't_Mg':
             allmols = [*allmols, mMg, mMgOH]
-            lnkMg = lnks[q]
+            lnkMgOH = lnks[q]
             q += 1
         elif ele == 't_trisH':
             allmols = [*allmols, mtrisH, mtris]
@@ -239,7 +239,8 @@ def _GibbsComponents(eqstate, tots1, fixmols1, eles, allions, fixions,
         else:
             gHSO4 = 0.0
         if tots1[eles == 't_Mg'] > 0:
-            gMg = _GibbsMg(mMg, lnacfMg, mMgOH, lnacfMgOH, mOH, lnacfOH, lnkMg)
+            gMg = _GibbsMgOH(mMg, lnacfMg, mMgOH, lnacfMgOH, mOH, lnacfOH,
+                lnkMgOH)
         else:
             gMg = 0.0
         if tots1[eles == 't_trisH'] > 0:
