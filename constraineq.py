@@ -1,4 +1,5 @@
 from autograd import numpy as np
+from copy import deepcopy
 from scipy.optimize import Bounds, minimize#, LinearConstraint
 import pytzer as pz
 
@@ -82,27 +83,30 @@ def getvarmolsD(eqstate, equilibria, tots, eles, fixZB):
     varmolsD = {}
     varZB = 0.0
     if 'BOH3' in equilibria:
+        tBOH3 = tots[eleindex('t_BOH3')]
         q = eqindex('BOH3')
-        varmolsD['BOH3'] = eqstate[q]
-        varmolsD['BOH4'] = tots[eleindex('t_BOH3')] - varmolsD['BOH3']
+        varmolsD['BOH3'] = tBOH3*eqstate[q]
+        varmolsD['BOH4'] = tBOH3 - varmolsD['BOH3']
         varZB = varZB - varmolsD['BOH4']
     if 'H2CO3' in equilibria and 'HCO3' in equilibria:
+        tH2CO3 = tots[eleindex('t_H2CO3')]
         q = eqindex('H2CO3')
-        varmolsD['CO2'] = eqstate[q]
+        varmolsD['CO2'] = tH2CO3*eqstate[q]
         q = eqindex('HCO3')
-        varmolsD['HCO3'] = eqstate[q]
-        varmolsD['CO3'] = (tots[eleindex('t_H2CO3')] - varmolsD['CO2'] -
-           varmolsD['HCO3'])
+        varmolsD['HCO3'] = tH2CO3*eqstate[q]
+        varmolsD['CO3'] = tH2CO3 - varmolsD['CO2'] - varmolsD['HCO3']
         varZB = varZB - varmolsD['HCO3'] - 2*varmolsD['CO3']
     if 'HF' in equilibria:
+        tHF = tots[eleindex('t_F')]
         q = eqindex('HF')
-        varmolsD['HF'] = eqstate[q]
-        varmolsD['F'] = tots[eleindex('t_F')] - varmolsD['HF']
+        varmolsD['HF'] = tHF*eqstate[q]
+        varmolsD['F'] = tHF - varmolsD['HF']
         varZB = varZB - varmolsD['F']
     if 'HSO4' in equilibria:
+        tHSO4 = tots[eleindex('t_HSO4')]
         q = eqindex('HSO4')
-        varmolsD['HSO4'] = eqstate[q]
-        varmolsD['SO4'] = tots[eleindex('t_HSO4')] - varmolsD['HSO4']
+        varmolsD['HSO4'] = tHSO4*eqstate[q]
+        varmolsD['SO4'] = tHSO4 - varmolsD['HSO4']
         varZB = varZB - varmolsD['HSO4'] - 2*varmolsD['SO4']
     mH_zb, mOH_zb = _mH_mOH_from_zb(fixZB, varZB)
     if 'H2O' in equilibria:
@@ -132,68 +136,113 @@ def getGibbsComponents(eqstate, equilibria, fixmolsT, tots1, eles, fixZB,
     gargs = (allindex, allmolsT, lnacfs)
     mH, lnacfH = _get_m_lnacf('H', *gargs)
     mOH, lnacfOH = _get_m_lnacf('OH', *gargs)
-    mHSO4, lnacfHSO4 = _get_m_lnacf('HSO4', *gargs)
-    mSO4, lnacfSO4 = _get_m_lnacf('SO4', *gargs)
-    GH2O = pz.equilibrate._GibbsH2O(lnaw, mH, lnacfH, mOH, lnacfOH,
-        lnks['H2O'])
-    GHSO4 = pz.equilibrate._GibbsHSO4(mH, lnacfH, mSO4, lnacfSO4, mHSO4,
-        lnacfHSO4, lnks['HSO4'])
-    return GH2O, GHSO4
+    if 'H2O' in equilibria:
+        GH2O = pz.equilibrate._GibbsH2O(lnaw, mH, lnacfH, mOH, lnacfOH,
+            lnks['H2O'])
+    else:
+        GH2O = 0.0   
+    if 'HSO4' in equilibria:
+        mHSO4, lnacfHSO4 = _get_m_lnacf('HSO4', *gargs)
+        mSO4, lnacfSO4 = _get_m_lnacf('SO4', *gargs)
+        GHSO4 = pz.equilibrate._GibbsHSO4(mH, lnacfH, mSO4, lnacfSO4, mHSO4,
+            lnacfHSO4, lnks['HSO4'])
+    else:
+        GHSO4 = 0.0
+    if 'BOH3' in equilibria:
+        mBOH3, lnacfBOH3 = _get_m_lnacf('BOH3', *gargs)
+        mBOH4, lnacfBOH4 = _get_m_lnacf('BOH4', *gargs)
+        GBOH3 = pz.equilibrate._GibbsBOH3(lnaw, lnacfBOH4, mBOH4, lnacfBOH3,
+            mBOH3, lnacfH, mH, lnks['BOH3'])
+    else:
+        GBOH3 = 0.0
+    return GH2O, GHSO4, GBOH3
     
 def getGibbs(eqstate, equilibria, fixmolsT, tots1, eles, fixZB, varions,
         allindex, allmxs, lnks):
-    GH2O, GHSO4 = getGibbsComponents(eqstate, equilibria, fixmolsT, tots1,
-        eles, fixZB, varions, allindex, allmxs, lnks)
-    return GH2O**2 + GHSO4**2
+    GH2O, GHSO4, GBOH3 = getGibbsComponents(eqstate, equilibria, fixmolsT,
+        tots1, eles, fixZB, varions, allindex, allmxs, lnks)
+    return GH2O**2 + GHSO4**2 + GBOH3**2
 
+def guesseqstate(equilibria, tots, eleindex):
+    eqstate = []
+    for eq in equilibria:
+        if eq == 'H2O':
+            eqstate.append(13.5)
+        elif eq == 'BOH3':
+            eqstate.append(0.5)
+        elif eq == 'H2CO3':
+            eqstate.append(0.01)
+        elif eq == 'HCO3':
+            eqstate.append(0.9)
+        elif eq == 'HF':
+            eqstate.append(0.1)
+        elif eq == 'HSO4':
+            eqstate.append(0.5)
+    return eqstate
+
+def getbounds(equilibria, tots, eleindex):
+    mins = []
+    maxs = []
+    for eq in equilibria:
+        if eq == 'H2O':
+            mins.append(-np.inf)
+            maxs.append(np.inf)
+        elif eq in {'BOH3', 'HF', 'H2CO3', 'HCO3', 'HF', 'HSO4'}:
+            mins.append(0.0)
+            maxs.append(1.0)
+    return Bounds(mins, maxs)
 
 # Define solution conditions
-fixmolsT = np.array([[1.0, 1.5]])
+fixmolsT = np.array([[0.0, 0.0]])
 fixions = ('Na', 'Cl')
 tempK = np.array([298.15])
 pres = np.array([10.10325])
-prmlib = pz.libraries.MIAMI
-eles = ('t_HSO4', 't_BOH3', 't_H2CO3', 't_F',)
-tots1 = np.array([2.0, 1.0, 1.0, 0.1])
+prmlib = deepcopy(pz.libraries.MIAMI)
+prmlib.dh['Aosm'] = pz.debyehueckel.Aosm_CRP94
+prmlib.bC['H-HSO4'] = pz.parameters.bC_H_HSO4_CRP94
+prmlib.bC['H-SO4'] = pz.parameters.bC_H_SO4_CRP94
+prmlib.lnk.pop('H2O')
+#eles = ('t_HSO4', 't_BOH3', 't_H2CO3', 't_F',)
+#tots1 = np.array([2.0, 1.0, 1.0, 0.1])
+eles = ('t_HSO4', 't_BOH3')
+tots1 = np.array([0.5, 0.1])
 varions, equilibria = get_varions_equilibria(eles, prmlib)
-eqstate = [0.1 for _ in equilibria]
 lnks = getlnks(tempK, equilibria, prmlib)
 fixchargesT = np.transpose(pz.properties.charges(fixions)[0])
 if len(fixchargesT) == 0:
     fixZB = 0.0
 else:
     fixZB = np.sum(fixmolsT*fixchargesT)
-varmolsD = getvarmolsD(eqstate, equilibria, tots1, eles, fixZB)
-allmolsT = getallmolsT(fixmolsT, varmolsD, varions)
+eqstate_guess = guesseqstate(equilibria, tots1, eles.index)
 allions = getallions(fixions, varions)
 prmlib.add_zeros(allions)
 allindex = allions.index
 allmxs = pz.matrix.assemble(allions, tempK, pres, prmlib=prmlib)
-GH2O, GHSO4 = getGibbsComponents(eqstate, equilibria, fixmolsT, tots1, eles,
-    fixZB, varions, allindex, allmxs, lnks)
-GTotal = getGibbs(eqstate, equilibria, fixmolsT, tots1, eles, fixZB, varions,
-    allindex, allmxs, lnks)
+Gargs = (equilibria, fixmolsT, tots1, eles, fixZB, varions, allindex, allmxs,
+    lnks)
+GH2O_guess, GHSO4_guess, GBOH3_guess = \
+    getGibbsComponents(eqstate_guess, *Gargs)
+GTotal_guess = getGibbs(eqstate_guess, *Gargs)
+bounds = getbounds(equilibria, tots1, eles.index)
+
+print(bounds)
+print(eqstate_guess)
 
 # Next: cycle through equilibria to auto-generate appropriate eqstate first
 # guesses, bounds and constraints
 # Test with serieses
 # Then go back and add parasites to getvarmolsD()
 
-## Evaluate thermodynamic equilibrium constants etc.
-#lnkH2O = prmlib.lnk['H2O'](tempK)
-#lnkHSO4 = prmlib.lnk['HSO4'](tempK)
+eqstate = minimize(lambda eqstate: getGibbs(eqstate, *Gargs),
+    eqstate_guess, method='trust-constr', bounds=bounds,
+    options={
+        'maxiter': 10000,
+        'verbose': 2,
+    })
+GH2O, GHSO4, GBOH3 = getGibbsComponents(eqstate['x'], *Gargs)
+GTotal = getGibbs(eqstate['x'], *Gargs)
 
-#eqstate_guess = [13.0, 0.5]
-#Gargs = (fixmolsT, fixZB, varions, allindex, allmxs, tots1, eles)
-#Gibbs_guess = getGibbs(eqstate_guess, *Gargs)
-#
-#bounds = Bounds(
-#    [-np.inf, 0.0],
-#    [ np.inf, tots1[0]],
-#)
-#eqstate = minimize(lambda eqstate: getGibbs(eqstate, *Gargs),
-#    eqstate_guess, method='trust-constr', bounds=bounds)
-#
 ## Test solution
-#pH2O_dissoc = eqstate['x'][0]
-#Gibbs = getGibbs(eqstate['x'], *Gargs)
+varmolsD = getvarmolsD(eqstate['x'], equilibria, tots1, eles, fixZB)
+aHSO4 = varmolsD['SO4']/tots1[eles.index('t_HSO4')]
+print(aHSO4)
