@@ -274,4 +274,5 @@ lnk = {
     'MgF': dissociation.MgF_MP98,
     'CaF': dissociation.CaF_MP98,
     'NH4': dissociation.NH4_MP98,
+    'HF': dissociation.HF_MP98,
 } # end of lnks dict

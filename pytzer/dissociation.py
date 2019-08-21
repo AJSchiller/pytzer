@@ -117,3 +117,8 @@ def NH4_MP98(tempK):
     """NH4+ dissociation [MP98]."""
     # This is from MP98 - should go check their cited ref. BP49 directly
     return MP98_eq23(tempK, -0.25444, -6285.33, 0, 0.0001635)
+
+def HF_MP98(tempK):
+    """HF dissociation [MP98]."""
+    # This is from MP98 - should go check their cited ref. DR79 directly
+    return MP98_eq23(tempK, -12.641, 1590.2, 0, 0)
